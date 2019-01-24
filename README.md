@@ -28,10 +28,10 @@ Parameters
 	-h  	print help message
 
 ## Status
-Under review
+Submitted
 
 ## Citation
-Yuansheng Liu, Leo Yu Zhang, Jinyan Li; bfMEM: fast detection of maximal exact matches via Bloom filter and rolling hash. 2018.
+Yuansheng Liu, Leo Yu Zhang, Jinyan Li; Fast detection of maximal exact matches via fixed sampling of query k-mers and Bloom filtering of index k-mers. 2019.
 
 ## Contacts
 If any bugs during you run our code, please email to <yyuanshengliu@gmail.com>
