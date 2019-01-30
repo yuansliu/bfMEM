@@ -1,6 +1,6 @@
 # bfMEM
 
-bfMEM is a tool for Maximal Exact Matches (MEMs) detecting. It is based on Bloom filter and rolling hash. The program is written in C++11 (tested with g++ >= 6.2.1) and works on Linux.
+bfMEM is a tool for Maximal Exact Matches (MEMs) detection. It is based on Bloom filter and rolling hash. The program is written in C++11 (tested with g++ >= 6.2.1) and works on Linux.
 
 
 ## Download & Compile
@@ -16,7 +16,7 @@ bfMEM is a tool for Maximal Exact Matches (MEMs) detecting. It is based on Bloom
 Parameters
 
 	-r  	reference genome, a multi-FASTA file
-	-q  	reference genome, a multi-FASTA file
+	-q  	query genome, a multi-FASTA file
 	-o  	output file
 	-l  	minimal length of matches; default is 100
 	-k  	length of k-mer
@@ -31,7 +31,7 @@ Parameters
 Submitted
 
 ## Citation
-Yuansheng Liu, Leo Yu Zhang, Jinyan Li; Fast detection of maximal exact matches via fixed sampling of query k-mers and Bloom filtering of index k-mers. 2019.
+Yuansheng Liu, Leo Yu Zhang, Jinyan Li. Fast detection of maximal exact matches via fixed sampling of query k-mers and Bloom filtering of index k-mers. 2019.
 
 ## Contacts
 If any bugs during you run our code, please email to <yyuanshengliu@gmail.com>
