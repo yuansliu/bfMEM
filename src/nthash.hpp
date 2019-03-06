@@ -1,3 +1,4 @@
+// from https://github.com/bcgsc/ntHash
 /*
  *
  * nthash.hpp

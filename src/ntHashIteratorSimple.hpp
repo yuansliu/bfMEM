@@ -1,3 +1,9 @@
+/* changed by Yuansheng Liu from https://github.com/bcgsc/ntHash/blob/master/ntHashIterator.hpp
+ * 
+ * Author of ntHashIterator.hpp: Hamid Mohamadi
+ * Genome Sciences Centre,
+ * British Columbia Cancer Agency
+ */
 #ifndef NTHASH__SIMPLE__ITERATOR_H
 #define NTHASH__SIMPLE__ITERATOR_H 1
 

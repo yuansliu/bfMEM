@@ -1,3 +1,8 @@
+/* The source code download from https://github.com/bcgsc/btl_bloomfilter/blob/master/BloomFilter.hpp
+ * We accept the License Agreement of the source code, only ACADEMIC USE.
+ * Some changes are made.
+ */
+
 /*
  *
  * BloomFilter.hpp

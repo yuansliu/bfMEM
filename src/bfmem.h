@@ -47,7 +47,10 @@ void radix_sort_128x(mm128_t *beg, mm128_t *end);
 KHASH_INIT(idx, uint64_t, uint64_t, 1, idx_hash, idx_eq)
 typedef khash_t(idx) idxhash_t;
 
-
+/* this function is https://github.com/lh3/minimap/blob/master/index.c
+ * authors: Heng Li
+ * changes: no
+ */
 const uint64_t *mm_idx_get(const mm_idx_t *mi, uint64_t minier, int *n) {
 	int mask = (1<<mi->b) - 1;
 	khint_t k;
@@ -66,6 +69,10 @@ const uint64_t *mm_idx_get(const mm_idx_t *mi, uint64_t minier, int *n) {
 	}
 }
 
+/* this function is https://github.com/lh3/minimap/blob/master/index.c
+ * authors: Heng Li
+ * changes: delete some lines
+ */
 void mm_idx_destroy(mm_idx_t *mi) {
 	int i;
 	if (mi == 0) return;
@@ -79,36 +86,41 @@ void mm_idx_destroy(mm_idx_t *mi) {
 }
 
 // 2 4 8 16 32 64 128 at most 128 files
-inline int hash1(const size_t &a, const size_t &b, const size_t &c) {
-	return 0;
+// inline int hash2(const size_t &a, const size_t &b, const size_t &c) {
+inline int hash2(const size_t &b) {
+	// return (a >> 7)&1;
+	return (b >> 9)&1;
 }
 
-inline int hash2(const size_t &a, const size_t &b, const size_t &c) {
-	return (a >> 7)&1;
+// inline int hash4(const size_t &a, const size_t &b, const size_t &c) {
+	// return (((a >> 7)&1)<<1) + ((b >> 5)&1);
+inline int hash4(const size_t &b) {
+	return (((b >> 9)&1)<<1) + ((b >> 5)&1);
 }
 
-inline int hash4(const size_t &a, const size_t &b, const size_t &c) {
-	return (((a >> 7)&1)<<1) + ((b >> 5)&1);
+// inline int hash8(const size_t &a, const size_t &b, const size_t &c) {
+inline int hash8(const size_t &b) {
+	return (((b >> 9)&1)<<2) + (((b >> 5)&1)<<1) + ((b >> 2)&1);
 }
 
-inline int hash8(const size_t &a, const size_t &b, const size_t &c) {
-	return (((a >> 7)&1)<<2) + (((b >> 5)&1)<<1) + ((c >> 2)&1);
+// inline int hash16(const size_t &a, const size_t &b, const size_t &c) { //2^4; 2 1 1
+inline int hash16(const size_t &b) {
+	return (((b >> 9)&3)<<2) + (((b >> 5)&1)<<1) + ((b >> 2)&1);
 }
 
-inline int hash16(const size_t &a, const size_t &b, const size_t &c) { //2^4; 2 1 1
-	return (((a >> 7)&3)<<2) + (((b >> 5)&1)<<1) + ((c >> 2)&1);
+// inline int hash32(const size_t &a, const size_t &b, const size_t &c) { //2^5; 2 2 1
+inline int hash32(const size_t &b) {
+	return (((b >> 9)&3)<<3) + (((b >> 5)&3)<<1) + ((b >> 2)&1);
 }
 
-inline int hash32(const size_t &a, const size_t &b, const size_t &c) { //2^5; 2 2 1
-	return (((a >> 7)&3)<<3) + (((b >> 5)&3)<<1) + ((c >> 2)&1);
+// inline int hash64(const size_t &a, const size_t &b, const size_t &c) { //2^6; 3 2 1
+inline int hash64(const size_t &b) {
+	return (((b >> 9)&7)<<3) + (((b >> 5)&3)<<1) + ((b >> 2)&1);
 }
 
-inline int hash64(const size_t &a, const size_t &b, const size_t &c) { //2^6; 3 2 1
-	return (((a >> 7)&7)<<3) + (((b >> 5)&3)<<1) + ((c >> 2)&1);
-}
-
-inline int hash128(const size_t &a, const size_t &b, const size_t &c) { //2^7; 3 3 1
-	return (((a >> 7)&7)<<4) + (((b >> 5)&7)<<1) + ((c>>2)&1);
+// inline int hash128(const size_t &a, const size_t &b, const size_t &c) { //2^7; 3 3 1
+inline int hash128(const size_t &b) {
+	return (((b >> 12)&7)<<4) + (((b >> 5)&7)<<1) + ((b>>2)&1);
 }
 
 

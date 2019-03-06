@@ -1,6 +1,6 @@
 CXX = g++
 # FLAGS  = -march=native -O3 -funroll-loops -w
-FLAGS  = -march=native -O3 -funroll-loops -Wno-unused-function -w -std=c++11 -pthread -fopenmp
+FLAGS  = -march=native -O3 -funroll-loops -Wno-unused-function -w -std=c++11 -pthread# -fopenmp
 # FLAGS  = -g -march=native -O3 -funroll-loops -Wno-unused-function -w -std=c++11 -pthread
 # FLAGS  = -march=native -O3 -Wno-unused-function -w -std=c++11 -pthread
 HEADER= src/BloomFilter.hpp src/ntHashIteratorSimple.hpp src/ntHashIterator.hpp \

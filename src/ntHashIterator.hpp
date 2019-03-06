@@ -1,3 +1,13 @@
+/* from https://github.com/bcgsc/ntHash
+ * some changes are made
+ */
+/*
+ *
+ * ntHashIterator.hpp
+ * Author: Hamid Mohamadi
+ * Genome Sciences Centre,
+ * British Columbia Cancer Agency
+ */
 #ifndef NTHASH__ITERATOR_H
 #define NTHASH__ITERATOR_H 1
 
@@ -55,6 +65,7 @@ public:
         init();
     }
 
+    /** Initialize internal state of iterator */
     inline void init()
     {
         if (m_k > m_seq_length) {
@@ -75,6 +86,7 @@ public:
             m_pos = std::numeric_limits<std::size_t>::max();
     }
 
+    /** Advance iterator right to the next valid k-mer */
     inline void next()
     {
         ++m_pos;
@@ -82,12 +94,12 @@ public:
             m_pos = std::numeric_limits<std::size_t>::max();
             return;
         }
-        // if(seedTab[(unsigned char)(m_seq[m_pos+m_k-1])]==seedN) {
+        // if(seedTab[(unsigned char)(m_seq[m_pos+m_k-1])]==seedN) { //changes
         if (m_seq[m_pos+m_k-1] == '{' || m_seq[m_pos+m_k-1] == '}' || m_seq[m_pos+m_k-1] == '\0') {
             m_pos += m_k;
             init();
         }
-        else {
+        else { // changes
             /*char *stbuf = (char*)malloc(sizeof(char)*(m_k+1));
             strncpy(stbuf, m_seq + m_pos, m_k);
             stbuf[m_k] = '\0';
@@ -102,7 +114,8 @@ public:
     	return m_pos;
     }
 
-    inline uint64_t getHash() {
+    // added by Yuansheng Liu
+    inline uint64_t getHash() { 
         // return m_hVec[0];
         // 
         const char *str = m_seq + m_pos;
