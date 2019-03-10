@@ -33,7 +33,8 @@ enum revcomp { no, yes, both };
 
 vector<pair<string, string> > resultfile; //first is the filename, second is 
 vector<int> splitfilenum;
-mutex resultfilemtx;
+map<string, pair<size_t, size_t> > smallfile;
+mutex resultfilemtx, smallfilemtx, mapmtx;
 
 const size_t MATCHES_BUFFER_SIZE = 1ULL << 24;
 const size_t BUFFER_SIZE = 1ULL << 18;
@@ -44,9 +45,10 @@ const int HASH_BITS = 20;
 const int HASH_SIZE = 1 << HASH_BITS;
 const int mask = HASH_SIZE - 1;
 
-std::string matchesFN;
+std::string matchesFN, smallMF;
 
 std::ofstream f_matches;
+std::ofstream fsmo;
 mutex fmathcesmtx;
 std::string R_FN;
 std::string Q_FN;
@@ -70,13 +72,15 @@ inline void initPars() {
 	// kmer = 60; //kmer is 4*i = kmer
 	isRC = no;
 	n_threads = 10;
-	folder = generateString("./bfmem", 10); //creat a temp folder for current input
+	folder = generateString("bfmem", 10); //creat a temp folder for current input
 
 	char *cmd = new char[200];
 	sprintf(cmd, "mkdir -p %s", folder.c_str());
 	system(cmd);
-	folder += "/";
 	delete[] cmd;
+
+	folder += "/";
+	smallMF = folder + "smallMatches";
 
 	memset(complement, 125, 256);
 	complement['A'] = 'T';
@@ -94,11 +98,11 @@ inline void initPars() {
 std::ostream *v1logger;
 
 inline void displayHelp(const char* prog) {
-	printf("bfMEM v1, by Yuansheng Liu, October 2018.\n");
+	printf("bfMEM v1.1, by Yuansheng Liu, March 2019.\n");
 	printf("Usage: %s -r <ref_genome> -q <query_genome> -o <output> [option parameters]\n", prog);
 	printf("\t options:\n \t\t -l <length> -k <length of k-mer> -s <strands> -t <threads>\n\n");
 	// printf("-----------\n");
-	printf("\t\t -r is the referent genome, a multi-FASTA file\n");
+	printf("\t\t -r is the reference genome, a multi-FASTA file\n");
 	printf("\t\t -q is the query genome, a multi-FASTA file\n");
 	printf("\t\t -o is the output file\n");
 	printf("\t\t -l is the minimum length of matches; default value is 100\n");
@@ -271,7 +275,8 @@ inline void dumpMEMTight(std::string &matchesBuffer, SequenceItem& item1, size_t
 inline void dumpMEM(std::string &matchesBuffer, SequenceItem& item1, size_t* match, size_t counter) {
 	size_t baseindex1 = match[0] - item1.second;
 	size_t baseindex2 = match[1] - counter;
-	matchesBuffer.append(to_string(baseindex2) + " " + 
+	// matchesBuffer.append(to_string(baseindex2) + " " + 
+	matchesBuffer.append(
 				item1.first + "\t" + 
 				to_string(baseindex1) + "\t" + 
 				to_string(baseindex2) + "\t" + 
@@ -307,6 +312,45 @@ inline void postProcessTight(std::string &matchesBuffer, std::vector<size_t*> &m
 	matchesBuffer.append(seqName);
 	matchesBuffer.append("\n");
 
+	if (matches.size() == 0) {
+		// displayMatchInfo(seqName, 0);
+		return;
+	}
+	char* gen1 = std::get<1>(*t1);
+	SequenceVector& seq1 = std::get<2>(*t1);
+	if (matches.size() > 1)
+		std::sort(matches.begin(), matches.end(), arrcmp);
+
+	SequenceItem seq1item;
+
+	size_t* prev_match = matches[0];
+	seq1item = findSeqDesc(prev_match[0], seq1);
+
+	// auto foundPos = std::find(gen1 + prev_match[0], gen1 + prev_match[0] + prev_match[2], 'N');
+	// if (foundPos == gen1 + prev_match[0] + prev_match[2])
+	dumpMEMTight(matchesBuffer, seq1item,  prev_match, counter);
+
+	std::uint64_t count = 1ULL;
+	for (auto match: matches) {
+		if (memcmp(prev_match, match, 3 * sizeof(size_t)) != 0) {
+			// auto foundPos = std::find(gen1 + match[0], gen1 + match[0] + match[2], 'N');
+			// if (foundPos != gen1 + match[0] + match[2])
+				// continue;
+			if (prev_match[0] != match[0])
+				seq1item = findSeqDesc(match[0], seq1);
+			dumpMEMTight(matchesBuffer, seq1item,  match, counter);
+			++count;
+		}
+		prev_match = match;
+	}
+	// displayMatchInfo(seqName, count);
+	for (auto match: matches)
+		delete[] match;
+	matches.clear();
+}
+
+/* this function change from previous one inline void postProcessTight(std::string &matchesBuffer, ...) */
+inline void postProcessTight(std::string &matchesBuffer, std::vector<size_t*> &matches, GenomeData *t1, const size_t &counter) {
 	if (matches.size() == 0) {
 		// displayMatchInfo(seqName, 0);
 		return;
@@ -828,6 +872,8 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 		flag[i] = true;
 	}
 
+	size_t bptr, eptr;
+
 	bool allflag = true;
 	int cnt = 0, n;
 	while (allflag) {
@@ -867,13 +913,7 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 						// 	debug = true;
 						// }
 						string seqfilename = folder + generateString(seqname);
-						// bool isopen = false; //first not open the file
-						// always open a file
-						resultfilemtx.lock();
-						resultfile.push_back({seqname, seqfilename});
-						resultfilemtx.unlock();
-
-						f_seq_matches.open(seqfilename);
+						bool isopen = false; //first not open the file
 
 						ntHashIteratorSimple fqitr(qstart, 0, rnumHashes, L, kmer, qseqlen);
 
@@ -925,6 +965,16 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 												sortMatches(matches);
 												if (matches.size() > 300) {
 													postProcessTight(matchesBuffer, matches);
+
+													if (!isopen) {
+														resultfilemtx.lock();
+														resultfile.push_back({seqname, seqfilename});
+														resultfilemtx.unlock();
+
+														f_seq_matches.open(seqfilename);
+														isopen = true;
+													}
+
 													f_seq_matches << matchesBuffer;
 													matchesBuffer.clear();
 												}
@@ -937,14 +987,50 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 						}
 						// if (debug) fprintf(stderr, "finale matches.size(): %lu\n", matches.size());
 
+						if (isopen) {
+							if (matches.size() > 0) {
+								postProcessTight(matchesBuffer, matches);
+								f_seq_matches << matchesBuffer;
+								matchesBuffer.clear();
+							}
+							f_seq_matches.close();
+						} else {
+							if (matches.size() > 0) {
+								postProcessTight(matchesBuffer, matches, rGenome, 0);
+								
+								smallfilemtx.lock();
+								bptr = fsmo.tellp();
+								fsmo << matchesBuffer;
+								eptr = fsmo.tellp();
+								smallfilemtx.unlock();
+
+								matchesBuffer.clear();
+
+								mapmtx.lock();
+								smallfile[seqname] = {bptr, eptr - bptr};
+								mapmtx.unlock();
+							}
+						}
+						
 						// if (isopen) {
 							// if (debug) fprintf(stderr, "isopen\n");
-						if (matches.size() > 0) {
+						/*if (matches.size() > 0) {
+							if (!isopen) {
+								resultfilemtx.lock();
+								resultfile.push_back({seqname, seqfilename});
+								resultfilemtx.unlock();
+
+								f_seq_matches.open(seqfilename);
+								isopen = true;
+							}
+
 							postProcessTight(matchesBuffer, matches);
 							f_seq_matches << matchesBuffer;
 							matchesBuffer.clear();
 						}
-						f_seq_matches.close();
+						if (isopen) {
+							f_seq_matches.close();
+						}*/
 						// } else { //do not open a file
 						// 	// if (debug) fprintf(stderr, "not open\n");
 						// 	postProcessTight(matchesBuffer, matches, rGenome, seqname, 0);
@@ -964,11 +1050,7 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 						string seqname = std::get<0>(chr) + " Reverse";
 						string seqfilename = folder + generateString(std::get<0>(chr) + "_Reverse");
 
-						resultfilemtx.lock();
-						resultfile.push_back({seqname, seqfilename});
-						resultfilemtx.unlock();
-
-						f_seq_matches.open(seqfilename);
+						bool isopen = false;
 
 						while (fqitr0 != fqitr0.end()) {
 							con = rrbf->contains(*fqitr0);
@@ -1016,6 +1098,16 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 												sortMatches(matches);
 												if (matches.size() > 300) {
 													postProcessTight(matchesBuffer, matches);
+
+													if (!isopen) {
+														resultfilemtx.lock();
+														resultfile.push_back({seqname, seqfilename});
+														resultfilemtx.unlock();
+
+														f_seq_matches.open(seqfilename);
+														isopen = true;
+													}
+
 													f_seq_matches << matchesBuffer;
 													matchesBuffer.clear();
 												}
@@ -1026,12 +1118,44 @@ void iterate2(GenomeData *rGenome, const int &rnumHashes, const int &L, const in
 							}
 							++fqitr0;
 						}
-						if (matches.size() > 0) {
-							postProcessTight(matchesBuffer, matches);
-							f_seq_matches << matchesBuffer;
-							matchesBuffer.clear();
+						// if (isopen) {
+						// 	if (matches.size() > 0) {
+						// 		postProcessTight(matchesBuffer, matches);
+						// 		f_seq_matches << matchesBuffer;
+						// 	}
+						// 	f_seq_matches.close();
+						// } else {
+						// 	postProcessTight(matchesBuffer, matches, rGenome, seqname, 0);
+						// 	fmathcesmtx.lock();
+						// 	f_matches << matchesBuffer;
+						// 	fmathcesmtx.unlock();
+						// }
+						// matchesBuffer.clear();
+
+						if (isopen) {
+							if (matches.size() > 0) {
+								postProcessTight(matchesBuffer, matches);
+								f_seq_matches << matchesBuffer;
+								matchesBuffer.clear();
+							}
+							f_seq_matches.close();
+						} else {
+							if (matches.size() > 0) {
+								postProcessTight(matchesBuffer, matches, rGenome, 0);
+								
+								smallfilemtx.lock();
+								bptr = fsmo.tellp();
+								fsmo << matchesBuffer;
+								eptr = fsmo.tellp();
+								smallfilemtx.unlock();
+
+								matchesBuffer.clear();
+
+								mapmtx.lock();
+								smallfile[seqname] = {bptr, eptr - bptr};
+								mapmtx.unlock();
+							}
 						}
-						f_seq_matches.close();	
 					}
 
 					deleteChr(chr);
@@ -1228,15 +1352,15 @@ inline void sortAndFindSeqInfo(string &filename, SequenceVector &seq1) {
 		size_t *prev_match = matches[0];
 
 		SequenceItem seq1item = findSeqDesc(prev_match[0], seq1);
-		// dumpMEMTight(matchesBuffer, seq1item, prev_match, 0);
-		dumpMEM(matchesBuffer, seq1item, prev_match, 0);
+		dumpMEMTight(matchesBuffer, seq1item, prev_match, 0);
+		// dumpMEM(matchesBuffer, seq1item, prev_match, 0);
 		// fprintf(splitfp, "%lu %lu %lu\n", prev_match[0], prev_match[1], prev_match[2]);
 		for (auto match: matches) {
 			if (memcmp(prev_match, match, 3 * sizeof(size_t)) != 0) {
 				// fprintf(splitfp, "%lu %lu %lu\n", match[0], match[1], match[2]);
 				seq1item = findSeqDesc(match[0], seq1);
-				// dumpMEMTight(matchesBuffer, seq1item, match, 0);
-				dumpMEM(matchesBuffer, seq1item, match, 0);
+				dumpMEMTight(matchesBuffer, seq1item, match, 0);
+				// dumpMEM(matchesBuffer, seq1item, match, 0);
 				if (matchesBuffer.size() > (size_t(MATCHES_BUFFER_SIZE*0.95))) {
 					f_chr_matches << matchesBuffer; 
 					matchesBuffer.clear();
@@ -1265,169 +1389,6 @@ void sortAndFindSeqInfoThread(SequenceVector *seq1) {
 	}
 }
 
-struct VecEle {
-	size_t a;
-	char *s;
-
-	VecEle() {} 
-	VecEle(size_t _a, char *_s): a(_a), s(_s) {}
-	void init(size_t _a, char *_s) {
-		a = _a;
-		s = strdup(_s);
-	} 
-};
-
-struct FileReader {
-	FILE *fp;
-	VecEle *vecEle;
-	int eleSize, idx;
-	char *s;
-
-	FileReader() {
-		s = new char[1024];
-	}
-	~FileReader() {
-		delete[] s;
-	}
-
-	// void init_old(string filename, int filenum) {
-	// 	fp = fopen(filename.c_str(), "r");
-	// 	if (NULL == fp) {
-	// 		fprintf(stderr, "File Open Error!\n");
-	// 		exit(0);
-	// 	}
-	// }
-
-	void init(string filename, int filenum) {
-		fp = fopen(filename.c_str(), "r");
-		if (NULL == fp) {
-			fprintf(stderr, "File Open Error!\n");
-			exit(0);
-		}
-		if (filenum <= 8) eleSize = 20000; else
-		if (filenum <= 64) eleSize = 8000; else
-		eleSize = 2500;
-		// eleSize = 1000;
-		vecEle = new VecEle[eleSize];
-		idx = 0;
-		size_t a;
-		
-		for (size_t i = 0; i < eleSize; ++i) {
-			if (fscanf(fp, "%lu %[^\n]", &a, s) != EOF) {
-				vecEle[i].init(a, s);
-			} else {
-				eleSize = i;
-				fclose(fp);
-				fp = NULL;
-				break;
-			}
-		}
-	}
-
-	// bool getEle_old(VecEle &res) {
-	// 	size_t a;
-	// 	if (fscanf(fp, "%lu %[^\n]", &a, s) != EOF) {
-	// 		res.init(a, s);
-	// 		return true;
-	// 	} else {
-	// 		fclose(fp);
-	// 		fp = NULL;
-	// 		return false;
-	// 	}
-	// }
-
-	bool getEle(VecEle &res) {
-		if (idx < eleSize) {
-			res = vecEle[idx++];
-			return true;
-		} else {
-			if (NULL == fp) return false;
-			size_t a;
-			if (idx >= eleSize) {
-				idx = 0;
-				for (size_t i = 0; i < eleSize; ++i) {
-					if (fscanf(fp, "%lu %[^\n]", &a, s) != EOF) {
-						vecEle[i].init(a, s);
-					} else {
-						eleSize = i;
-						fclose(fp);
-						fp = NULL;
-						break;
-					}
-				}
-				if (idx < eleSize) {
-					res = vecEle[idx++];
-					return true;
-				} else {
-					fclose(fp);
-					fp = NULL;
-					return false;
-				}
-			}
-		}
-	}
-};
-
-struct PriEle {
-	size_t a, k;
-	char *s;
-	PriEle() {}
-	PriEle(size_t _a, size_t _k, char *_s): a(_a), k(_k), s(_s) {}
-	friend bool operator < (PriEle a, PriEle b) { //smallest first
-		return a.a > b.a;
-	}
-};
-
-void mergeSortedFiles(vector<string> &files) {
-	priority_queue<PriEle> q;
-	int filesize = files.size();
-	FileReader *fr = new FileReader[filesize];
-	for (size_t i = 0; i < filesize; ++i) {
-		fr[i].init(files[i], filesize);
-	}
-	string mbuf;
-	mbuf.reserve(MATCHES_BUFFER_SIZE);
-	size_t k, a;
-
-	VecEle ve;
-	for (size_t i = 0; i < filesize; ++i) {
-		if (fr[i].getEle(ve)) {
-			q.push(PriEle(ve.a, i, ve.s));
-		}
-	}
-
-	while (!q.empty()) {
-		mbuf.append(" " + string(q.top().s) + "\n");
-		delete[] (q.top().s);
-		if (mbuf.size() > (size_t(MATCHES_BUFFER_SIZE*0.95))) {
-			f_matches << mbuf; 
-			mbuf.clear();
-		}
-		a = q.top().a;
-		k = q.top().k;
-		q.pop();
-
-		while (fr[k].getEle(ve)) {
-			if (ve.a == a) {
-				mbuf.append(" " + string(ve.s) + "\n");
-				delete[] ve.s;
-				if (mbuf.size() > (size_t(MATCHES_BUFFER_SIZE*0.95))) {
-					f_matches << mbuf; 
-					mbuf.clear();
-				}
-			} else { //ve.a != a
-				q.push(PriEle(ve.a, k, ve.s));
-				break;
-			}
-		}
-	}
-	if (mbuf.size() > 0) {
-		f_matches << mbuf;
-		mbuf.clear();
-	}
-	delete[] fr;
-}
-
 void mergeSortedFiles(SequenceVector &qseq) {
 	size_t bytesNum = 1UL<<29;
 	char* buf1 = new char[bytesNum + 2];
@@ -1436,95 +1397,180 @@ void mergeSortedFiles(SequenceVector &qseq) {
 		chrname2k[resultfile[k].first] = k;
 	}
 
+	ifstream smfi;
+	smfi.open(smallMF);
+	pair<size_t, size_t> ptr;
+
 	for (int ii = 0; ii < qseq.size(); ++ii) {
 		if (isRC != yes) {
-			int k = chrname2k[qseq[ii].first];
 
 			string mbuf;
 			mbuf.append("> ");
-			mbuf.append(resultfile[k].first);
+			mbuf.append(qseq[ii].first);
 			mbuf.append("\n");
 			f_matches << mbuf;
 			mbuf.clear();
 
-			if (splitfilenum[k] > 1) {
-				string folder = resultfile[k].second + "_split";
-				vector<string> files;
-				for (int i = 0; i < splitfilenum[k]; ++i) {
-					files.push_back(folder + "/part" + to_string(i));
-				}
-				mergeSortedFiles(files);
-			} else 
-			if (splitfilenum[k] == 1) {
-			// 	// nothing
-			// } else { // splitfilenum[k] == 1
-				std::ifstream f(resultfile[k].second, std::ios::ate | std::ios::binary);
-				if (f.fail()) {
-					fprintf(stderr, "error\n");
-					exit(0);
-				}
-				size_t N = f.tellg();
-				// std::cerr << "N: " << N << "\n";
-				size_t t = 0, tmp;
-				f.seekg(0, std::ios::beg);	
-				while (t < N) {
-					tmp = N - t;
-					if (tmp > bytesNum) {
-						tmp = bytesNum;
-					}
-					t += tmp;
-					f.read(buf1, tmp);
-					buf1[tmp] = '\0';
+			if (chrname2k.find(qseq[ii].first) != chrname2k.end()) {
 
-					f_matches << buf1;
+				int k = chrname2k[qseq[ii].first];
+
+				if (splitfilenum[k] > 1) {
+					// string folder = resultfile[k].second + "_split";
+					// vector<string> files;
+					// for (int i = 0; i < splitfilenum[k]; ++i) {
+					// 	files.push_back(folder + "/part" + to_string(i));
+					// }
+					// mergeSortedFiles(files);
+
+					// ----
+					string folder = resultfile[k].second + "_split";
+					for (int i = 0; i < splitfilenum[k]; ++i) {
+						string splitfilename = folder + "/part" + to_string(i);
+						std::ifstream f(splitfilename, std::ios::ate | std::ios::binary);
+						if (f.fail()) {
+							fprintf(stderr, "error\n");
+							exit(0);
+						}
+						size_t N = f.tellg();
+						// std::cerr << "N: " << N << "\n";
+						size_t t = 0, tmp;
+						f.seekg(0, std::ios::beg);	
+						while (t < N) {
+							tmp = N - t;
+							if (tmp > bytesNum) {
+								tmp = bytesNum;
+							}
+							t += tmp;
+							f.read(buf1, tmp);
+							buf1[tmp] = '\0';
+
+							f_matches << buf1;
+						}
+						f.close();
+					}
+				} else 
+				if (splitfilenum[k] == 1) {
+					std::ifstream f(resultfile[k].second, std::ios::ate | std::ios::binary);
+					if (f.fail()) {
+						fprintf(stderr, "error\n");
+						exit(0);
+					}
+					size_t N = f.tellg();
+					// std::cerr << "N: " << N << "\n";
+					size_t t = 0, tmp;
+					f.seekg(0, std::ios::beg);	
+					while (t < N) {
+						tmp = N - t;
+						if (tmp > bytesNum) {
+							tmp = bytesNum;
+						}
+						t += tmp;
+						f.read(buf1, tmp);
+						buf1[tmp] = '\0';
+
+						f_matches << buf1;
+					}
+					f.close();
 				}
-				f.close();
+			} else 
+			if (smallfile.find(qseq[ii].first) != smallfile.end()) {
+				ptr = smallfile[qseq[ii].first];
+				// fprintf(stderr, "%lu %lu\n", ptr.first, ptr.second);
+
+				smfi.seekg(ptr.first, std::ios::beg);
+				smfi.read(buf1, ptr.second);
+				buf1[ptr.second] = '\0';
+
+				f_matches << buf1;
 			}
+			
 		}
 
 		if (isRC != no) {
-			int k = chrname2k[qseq[ii].first + " Reverse"];
 
+			string fn = qseq[ii].first + " Reverse";
 			string mbuf;
 			mbuf.append("> ");
-			mbuf.append(resultfile[k].first);
+			mbuf.append(fn);
 			mbuf.append("\n");
 			f_matches << mbuf;
 			mbuf.clear();
 
-			if (splitfilenum[k] > 1) {
-				string folder = resultfile[k].second + "_split";
-				vector<string> files;
-				for (int i = 0; i < splitfilenum[k]; ++i) {
-					files.push_back(folder + "/part" + to_string(i));
-				}
-				mergeSortedFiles(files);
-			} else 
-			if (splitfilenum[k] == 1) {
-				std::ifstream f(resultfile[k].second, std::ios::ate | std::ios::binary);
-				if (f.fail()) {
-					fprintf(stderr, "error\n");
-					exit(0);
-				}
-				size_t N = f.tellg();
-				// std::cerr << "N: " << N << "\n";
-				size_t t = 0, tmp;
-				f.seekg(0, std::ios::beg);	
-				while (t < N) {
-					tmp = N - t;
-					if (tmp > bytesNum) {
-						tmp = bytesNum;
-					}
-					t += tmp;
-					f.read(buf1, tmp);
-					buf1[tmp] = '\0';
+			if (chrname2k.find(fn) != chrname2k.end()) {
+				int k = chrname2k[fn];
+				if (splitfilenum[k] > 1) {
+					// string folder = resultfile[k].second + "_split";
+					// vector<string> files;
+					// for (int i = 0; i < splitfilenum[k]; ++i) {
+					// 	files.push_back(folder + "/part" + to_string(i));
+					// }
+					// mergeSortedFiles(files);
 
-					f_matches << buf1;
+					// 
+					string folder = resultfile[k].second + "_split";
+					for (int i = 0; i < splitfilenum[k]; ++i) {
+						string splitfilename = folder + "/part" + to_string(i);
+						std::ifstream f(splitfilename, std::ios::ate | std::ios::binary);
+						if (f.fail()) {
+							fprintf(stderr, "error\n");
+							exit(0);
+						}
+						size_t N = f.tellg();
+						// std::cerr << "N: " << N << "\n";
+						size_t t = 0, tmp;
+						f.seekg(0, std::ios::beg);	
+						while (t < N) {
+							tmp = N - t;
+							if (tmp > bytesNum) {
+								tmp = bytesNum;
+							}
+							t += tmp;
+							f.read(buf1, tmp);
+							buf1[tmp] = '\0';
+
+							f_matches << buf1;
+						}
+						f.close();
+					}
+				} else 
+				if (splitfilenum[k] == 1) {
+					std::ifstream f(resultfile[k].second, std::ios::ate | std::ios::binary);
+					if (f.fail()) {
+						fprintf(stderr, "error\n");
+						exit(0);
+					}
+					size_t N = f.tellg();
+					// std::cerr << "N: " << N << "\n";
+					size_t t = 0, tmp;
+					f.seekg(0, std::ios::beg);	
+					while (t < N) {
+						tmp = N - t;
+						if (tmp > bytesNum) {
+							tmp = bytesNum;
+						}
+						t += tmp;
+						f.read(buf1, tmp);
+						buf1[tmp] = '\0';
+
+						f_matches << buf1;
+					}
+					f.close();
 				}
-				f.close();
+			} else 
+			if (smallfile.find(fn) != smallfile.end()) {
+				ptr = smallfile[fn];
+				// fprintf(stderr, "%lu %lu\n", ptr.first, ptr.second);
+
+				smfi.seekg(ptr.first, std::ios::beg);
+				smfi.read(buf1, ptr.second);
+				buf1[ptr.second] = '\0';
+
+				f_matches << buf1;
 			}
 		}
 	}
+	smfi.close();
 	delete[] buf1;
 }
 
@@ -1801,6 +1847,7 @@ int main(int argc, char* argv[]) {
 	stopwatch.resume();
 
 	f_matches.open(matchesFN);
+	fsmo.open(smallMF);
 
 	vector<thread> threadVec2;
 	for (int i = 0; i < n_threads; ++i) {
@@ -1810,6 +1857,7 @@ int main(int argc, char* argv[]) {
 		thr.join();
 	});
 
+	fsmo.close();
 	// delete some memory
 	for (int i = 0; i < n_threads; ++i) {
 		thr_seg[i].clear();
@@ -1844,11 +1892,12 @@ int main(int argc, char* argv[]) {
 		thr.join();
 	});
 
-	// rseq
-	*v1logger << "Time of splitting files = " << stopwatch.stop() << std::endl;
-	stopwatch.resume();
-
-	*v1logger << "Number of splitted files = " << filesvec.size() << std::endl;
+	if (filesvec.size() > 0) {
+		*v1logger << "Number of splitted files = " << filesvec.size() << std::endl;
+		// rseq
+		*v1logger << "Time of splitting files = " << stopwatch.stop() << std::endl;
+		stopwatch.resume();
+	}
 
 	filesvecidx = 0;
 	std::vector<thread> threadVec4;
@@ -1871,7 +1920,7 @@ int main(int argc, char* argv[]) {
 	*v1logger << "Time of merging sorted files = " << stopwatch.stop() << std::endl;
 	stopwatch.resume();
 
-	char *cmd = new char[300];
+	char *cmd = new char[128];
 	sprintf(cmd, "rm -rf %s", folder.c_str());
 	system(cmd);
 	delete[] cmd;

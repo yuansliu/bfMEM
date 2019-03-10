@@ -30,6 +30,18 @@ Options
 			'b' is both foward and reverse-complement.
 	-h  	print help message
 
+### Format conversion & Result comparison 
+
+Convert the output of bfMEM to the format of copMEM (i.e., MEMs with the same order).
+
+	./formatconvert f1 f2
+
+*f1* is the result of bfMEM; *f2* stores the format converted result.
+
+	./compareMEM f1 f2
+
+Compare the MEMs in the two files *f1* and *f2*. The program compare two files row by row.
+
 ## Status
 Submitted
 
