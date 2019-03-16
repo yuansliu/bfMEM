@@ -23,7 +23,7 @@ Options
 
 	-l  	minimal length of matches; default is 100
 	-k  	length of k-mer (some default values are set)
-	-t  	number of threads
+	-t  	number of threads (default t=10)
 	-s  	strands; 
 			default is foward; 
 			'r' is reverse-complement; 
@@ -40,7 +40,7 @@ Convert the output of bfMEM to the format of copMEM (i.e., MEMs with the same or
 
 	./compareMEM f1 f2
 
-Compare the MEMs in the two files *f1* and *f2*. The program compare two files row by row.
+Compare the MEMs in the two files *f1* and *f2*. The program compares two files row by row.
 
 ## Status
 Submitted
