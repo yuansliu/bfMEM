@@ -1,4 +1,12 @@
-// from https://github.com/bcgsc/ntHash
+/* from https://github.com/bcgsc/ntHash
+ * The following function is added to support sampling k-mers:
+ * "NTM64(const char *charOut, const char *charIn, const unsigned k, const unsigned m, 
+ *        uint64_t *hVal, const unsigned w)"
+ * 
+ * The following bool function is added to record the position of nonATGC char
+ * "NTM64(const char *kmerSeq, const unsigned k, const unsigned m, uint64_t *hVal, unsigned& locN)"
+ */
+
 /*
     MIT License
 

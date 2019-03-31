@@ -1,5 +1,10 @@
 /* changed by Yuansheng Liu from https://github.com/bcgsc/ntHash/blob/master/ntHashIterator.hpp
+ * Add the sampling k-mers, i.e., only calculate the hash values of the sampled k-mers
+ * The sampling step is m_step
  * 
+ * Functions, i.e., checkATGC(), calcNextWindow(), are added to suport sampling
+ */
+/* 
  * Author of ntHashIterator.hpp: Hamid Mohamadi
  * Genome Sciences Centre,
  * British Columbia Cancer Agency
@@ -186,6 +191,7 @@ public:
     	return m_pos;
     }
 
+    // this hash function is from http://www.amsoftware.narod.ru/algo2.html
     inline uint64_t getHash() {
         // return m_hVec[0];
         const char *str = m_seq + m_pos;

@@ -1,6 +1,12 @@
 /* from https://github.com/bcgsc/ntHash
- * some changes are made
+ * The following two variables of original ntHashIterator are deleted:
+ *      uint64_t m_fhVal; // forward-strand k-mer hash value 
+ *      uint64_t m_rhVal; // reverse-complement k-mer hash value 
+ * 
+ * And, we add a function getHash() to return the current hash value of k-mer
+ * It is from http://www.amsoftware.narod.ru/algo2.html
  */
+
 /*
     MIT License
 
@@ -139,9 +145,8 @@ public:
     }
 
     // added by Yuansheng Liu
+    // this hash function is from http://www.amsoftware.narod.ru/algo2.html
     inline uint64_t getHash() { 
-        // return m_hVec[0];
-        // 
         const char *str = m_seq + m_pos;
         std::uint64_t hash = m_k;
         for (std::uint32_t j = 0; j < m_k/4; ) {
