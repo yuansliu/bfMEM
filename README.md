@@ -42,11 +42,8 @@ Convert the output of bfMEM to the format of copMEM (i.e., MEMs with the same or
 
 Compare the MEMs in the two files *f1* and *f2*. The program compares two files row by row.
 
-## Status
-Submitted
-
 ## Citation
-Yuansheng Liu, Leo Yu Zhang, Jinyan Li. Fast detection of maximal exact matches via fixed sampling of query k-mers and Bloom filtering of index k-mers. 2019.
+Yuansheng Liu, Leo Yu Zhang, Jinyan Li. Fast detection of maximal exact matches via fixed sampling of query k-mers and Bloom filtering of index k-mers. Bioinformatics, 2019.
 
 ## Contacts
 If any bugs during you run our code, please email to <yyuanshengliu@gmail.com>
