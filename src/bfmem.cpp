@@ -1203,6 +1203,7 @@ size_t filesvecidx = 0;
 
 inline void split(string filename, SequenceVector &seq1, int &filenum) {
 	std::ifstream f(filename, std::ios::ate | std::ios::binary);
+	if (f.fail()) return;
 	size_t N = f.tellg(); //bytes
 	f.close();
 	filenum = 0; // no matches
