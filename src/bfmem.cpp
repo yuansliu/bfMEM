@@ -59,7 +59,13 @@ char complement[256];
 
 static const char alphanum[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 inline string generateString(const string &chr, int length = 5) {
-	string res = chr + "_";
+	string res = "bfmem_";
+	for (int i = 0; i < chr.length(); ++i) {
+		if (isdigit(chr[i]) || isalpha(chr[i])) res += chr[i];
+		else res += "_";
+	} 
+
+	res += "_";
 	for (int i = 0; i < length; ++i) {
 		res += alphanum[rand() % 62];
 	}
