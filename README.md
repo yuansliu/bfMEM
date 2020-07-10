@@ -22,7 +22,7 @@ Parameters
 Options
 
 	-l  	minimal length of matches; default is 100
-	-k  	length of k-mer (some default values are set)
+	-k  	length of k-mer, k%4=0 (some default values are set; if l < 34, k should be privided)
 	-t  	number of threads (default t=10)
 	-s  	strands; 
 			default is foward; 
